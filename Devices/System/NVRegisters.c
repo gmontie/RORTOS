@@ -31,10 +31,10 @@
 #include <xc.h>
 #include <string.h>
 #include "NVRegisters.h"
-#include "Register.h"
 #include "Registers.h"
-#include "Fops.h"
+#include "Register.h"
 #include "Device.h"
+#include "Fops.h"
 
 // static unsigned * RomBlock; // Only if malloc is used.
 static unsigned   RomBlock[30];
@@ -69,6 +69,7 @@ static unsigned MemSize = 0;
 static int PageSize = 0;
 static unsigned Pages = 0;
 static Register * Registers = 0;
+static volatile IndicatorBits * ISS;
 static int NbrOfRomRegisters = 0;
 
 /***********************************************************************/
@@ -81,19 +82,19 @@ static int NbrOfRomRegisters = 0;
 /*               the Register File of registers.                       */
 /*                                                                     */
 /***********************************************************************/
-NVRegisters * InitNVRam(Service * NvRam)
+NVRegisters * InitNvManager(Service * NvRam)
 {
    Registers = getRegisterSet();
    if(NvRam->DeviceClass == FLASH_MEM)
    {
       EEProm = NvRam->Driver;
+      This.Resource = EEProm->Resource;
    }
    PageSize = EEProm->IOCTL(GET_PAGE_SIZE);
-   //RomBlock = (unsigned *)malloc( sizeof(unsigned) * PageSize );
    MemSize = EEProm->IOCTL(GET_MEM_SIZE); 
    Pages = EEProm->IOCTL(GET_NBR_OF_PAGES);
-   //BaseAddress = PageSize; // First Page is for housekeeping   
    NbrOfRomRegisters = readOnlyRegisters();
+   ISS = getSystemStat();
    Map = getRomRegisterMap();
    ReverseMap = getRevRomRegMap();
    return &This;
@@ -289,7 +290,8 @@ void Save(void)
    unsigned BytesNeeded = NbrOfRomRegisters << (REGISTER_WIDTH - 1);
    unsigned PagesNeeded;
    int BytesLeft;
-   
+
+   ISS->CfgDirty = 0; // Stop Blocking
    if( BytesNeeded > PageSize)
       PagesNeeded = BytesNeeded / PageSize;
    else

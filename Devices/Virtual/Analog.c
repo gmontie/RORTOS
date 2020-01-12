@@ -43,11 +43,10 @@
 
 //////////////////////////////////////////////////////////////////////////////
 // Constants Area
-//
+///
 #define DELTA                0x16
-#define SETTLE_COUNT            2
-#define MAX_UPDATE_COUNTS      15
-#define MUX_RAPAROUND      0b0011
+#define SETTLE_COUNT           35
+#define MAX_UPDATE_COUNTS    0x15
 
 //////////////////////////////////////////////////////////////////////////////
 // Private Methods
@@ -55,6 +54,7 @@
 static void HandleSamples( void );
 void NewSample(void);
 static Boolean ReadingReady(void);
+static void Flush(void);
 
 #define DISCRIPTION_ANLG_METER "Analog Volt Meter"
 
@@ -64,16 +64,14 @@ static Boolean ReadingReady(void);
 static ADC_SAMPLING_STATES ADC_SampleState;
 static iQueue Samples;
 static AdOps * Adc;
-static Service * cd4051;
 static long Sum;
 static unsigned AverageOfSamples = 0;
 static unsigned aNewSample = 0;
 static unsigned AverageCounts;
-static unsigned RapAround;
-static unsigned Skips;
-static unsigned CurrentIndex;
+static unsigned * CurrentIndex;
 static Register * ADReading; // A Pointer to the Raw ADC Reading Register
-static IndicatorBits * SystemStat;
+static volatile IndicatorBits * SystemStat;
+int Skips;
 
 static Service This =
 {
@@ -88,38 +86,26 @@ static Service This =
    .Thread = HandleSamples,
    .Reading = 0, //ReadVoltage,
    .Write = 0,   //WriteCalData,
-   .Reset = 0,   //ResetAverage,
-   .Flush = 0,   //ResetAverage,
+   .Flush = Flush,   //ResetAverage,
    .IsReady = ReadingReady,
 };
 
 /******************************************************************************/
 /*   Instantiate Module                                                       */
 /******************************************************************************/
-Service * NewAnalog(AdOps * ChipsADC, Service * MuxIn, VBLOCK * Blk)
+Service * NewAnalog(AdOps * ChipsADC, VBLOCK * Blk)
 {
-   Adc = ChipsADC;
-
    ADReading = getRegister( Blk->NextValue() );
+   CurrentIndex = getRegisterVal( Blk->NextValue() );
    SystemStat = getSystemStat();
-   if(MuxIn != 0)
-   {
-      cd4051 = MuxIn;
-      RapAround = cd4051->Read( 0 );
-      CurrentIndex = 0;
-   }
-   else
-   {
-      cd4051 = 0;
-      RapAround = 0;
-   }
+   
    ADC_SampleState = START;
-   Skips = SETTLE_COUNT;
+   Skips = 0; //SETTLE_COUNT;
    This.Status.Allocated = True;
    This.Driver = ChipsADC;
    This.Arg = (void *)ADC_SampleState;
+   Adc = ChipsADC;
    Adc->Start(); // Start the ADC Peripheral
-   //Adc->StartReading();
    return &This;
 }
 
@@ -140,36 +126,36 @@ static void HandleSamples(void)
          break;
       case SORT_SAMPLES:
          Adc->Sort();
-         ADC_SampleState = SKIP;
+         ADC_SampleState = NEXT_READING;
          break;
-      case SKIP:
-         Adc->Next(); // Display results after digitally filtering reading
-         if(Skips == 0)
+      case NEXT_READING:
+         Adc->Next(); // Post results after digitally filtering reading
+         ADC_SampleState = START;
+         SystemStat->AdRdy = True;
+         break;
+      case SKIP:         
+         if(Skips > 0)
          {
-            ADC_SampleState = NEXT_READING;
-            Skips = SETTLE_COUNT;
+            Skips--;
+            SystemStat->AdRdy = False;
          }
          else
          {
-            Skips--;
+            //Skips = SETTLE_COUNT;
             ADC_SampleState = START;
          }
          break;
-      case NEXT_READING:
-         if ( cd4051 )
-         {
-            cd4051->Thread();
-            CurrentIndex++;
-            CurrentIndex &= RapAround;
-            cd4051->Poke(CurrentIndex);
-         }
-         ADC_SampleState = REPEAT;
-         break;
-      case REPEAT:
-         ADC_SampleState = START;
-         SystemStat->AdRdy = False;
-         break;
    }
+}
+
+/******************************************************************************/
+/*  Flushes all values for the current reading and starts over                */
+/******************************************************************************/
+static void Flush(void)
+{
+   Skips = SETTLE_COUNT;
+   ADC_SampleState = SKIP;
+   Adc->Clear();
 }
 
 /******************************************************************************/

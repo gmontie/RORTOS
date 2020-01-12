@@ -34,6 +34,7 @@
 #include "defs.h"
 #include "Register.h"
 #include "Device.h"
+#include "Fops.h"
 
 typedef struct
 {
@@ -44,8 +45,10 @@ typedef struct
     void (*LoadRegisters)(void);
     void (*StoreRegisters)(void);
     int (*Reset)(void);
+    //void (*Release)(void);
+    Bus Resource;
 }NVRegisters;
 
-NVRegisters * InitNVRam( Service * );
+NVRegisters * InitNvManager( Service * );
 
 #endif

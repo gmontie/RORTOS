@@ -32,6 +32,7 @@
 #define DEVICE_H
 
 #include "defs.h"
+#include "Registers.h"
 
 typedef enum
 {
@@ -45,6 +46,7 @@ typedef enum
    PortB_IO, 
    Pwm, 
    FAN,
+   FANS,
    FAN_BANK,
    SHARED_MUX,
    USER_THREAD,
@@ -67,6 +69,8 @@ typedef enum
     SYSTEM_DEV,
 }DevClass;
 
+typedef enum{ None = 0, Run, Block, Terminate}StateRequest;
+
 typedef struct
 {
     union
@@ -82,7 +86,7 @@ typedef struct
         };
         unsigned Field;
     };
-    unsigned Raw;
+    StateRequest Request;
 } ThreadStates;
 
 #define NO_OF_DEVICES 8
@@ -90,6 +94,7 @@ typedef struct
 typedef enum{ReadFn, ReadingFn, PeekFn, NextFn}InputFnTypes;
 typedef enum{WriteFn, PokeFn}OutputFnTypes;
 typedef enum{UpDateFn, DeviceFn, ProcessFn}DevFnTypes;
+
 
  // Defines a generic device Object.
 typedef struct service
@@ -102,8 +107,9 @@ typedef struct service
     unsigned       Id;
 
     // Descriptor MainThread;
-    unsigned       WaitingOnMask;
+    BlockingOn     WaitingOnMask;
 
+    // Arguments, or a pointer to other structs
     union
     {
         struct service * Dev;

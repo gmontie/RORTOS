@@ -131,6 +131,7 @@ Service * InitM25LC320(fops * anSpiDev)
    {
       This->Discription = DISCRIPTION_M25LC320;
       This->DeviceClass = FLASH_MEM;
+      M25LC320RomDevice.Resource = SpiDev->Resource;
       M25LC320RomDevice.Usr=(void *)SpiDev;
       This->Driver = &M25LC320RomDevice;
    }

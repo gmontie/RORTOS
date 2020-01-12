@@ -25,17 +25,16 @@
 /*  what you give them.                                                   */
 /*                                                                        */
 /**************************************************************************/
-#ifndef AUB_FAN_H
-#define AUB_FAN_H
+#ifndef FAN_H
+#define FAN_H
 
 #include "System.h"
 #include "Register.h"
+#include "PWM.h"
 #include "Device.h"
+#include "FanAUB0812VH.h"
 #include "Blk.h"
-#include "Servlet.h"
 
-#define PWM_PERIOD 0x400 //0x300
-
-Servlet * NewAUB0812VH(VBLOCK * BlkPtr); //Register * FanCounts, Register * FanRps)
-
+Service * NewFanGroup(VBLOCK * BlkPtr, PwmThread );
+void ChangeFanState(Boolean _On_);
 #endif

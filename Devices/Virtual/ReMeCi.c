@@ -74,6 +74,7 @@ static fops * Fi = 0; // A communications object such as a UART.
 static LINE_STATES EntryStates; // The current state for the protocol state 
 
 static volatile IndicatorBits * SystemStat;
+static volatile RequestBits * Request;
 static UpdateQueue SaveQue;
 
 // machine.
@@ -88,7 +89,7 @@ static Service This =
    .Discription = REMECI_DEVICE,
    .AuxUse = True,
    .Id = (0x0100 + (int)Console),
-   .WaitingOnMask = CON_READY_BIT,
+   //.WaitingOnMask = UART1Rdy,
    .Arg = 0,
    .FnType = ProcessFn,
    .Thread = Tokenizer,
@@ -110,6 +111,7 @@ Service * NewReMeCI(fops * Interface)
 {
    Fi = Interface;
    Element = getRegisterSet();
+   Request = getRequestBits();
    EntryStates = Next;
    Address = 0;
    Value = 0;
@@ -117,6 +119,16 @@ Service * NewReMeCI(fops * Interface)
    This.Status.Allocated = True;
    This.Driver = Interface;
    SystemStat = getSystemStat();
+   switch(Fi->Resource)
+   {
+      case _Uart_1:
+         This.WaitingOnMask = UART1Rdy;
+         break;
+      case _Uart_2:
+         This.WaitingOnMask = UART2Rdy;
+      default:
+         This.WaitingOnMask = NONE_BLKD;
+   }
    return &This;
 }
 
@@ -140,7 +152,6 @@ static void ParseInput(void)
    switch (Line[0])
    {
       case '#': // Send the contents of the whole list of Registers
-         T3CONbits.TON = 0;
          for (Address = 0; Address < MEMORY_SIZE; Address++)
          {
             Adl = 0xFF & Element[Address].Value; // Get Register Elements Low value
@@ -153,7 +164,6 @@ static void ParseInput(void)
          }
          Fi->PutCh(ETB); // Indicate end of packet transmission
          break;
-         T3CONbits.TON = 1;
       case 'n':
       case 'N': // Send the name of name Register
           T3CONbits.TON = 0;
@@ -168,7 +178,6 @@ static void ParseInput(void)
           Fi->PutCh(ETB);
           break;
       case '!': // Send all of the elements which have changed due to readings
-         //T3CONbits.TON = 0;
          for (Address = 0; Address < MEMORY_SIZE; Address++)
          {
             if (Element[Address].Changed) // If the elements has changed
@@ -235,8 +244,10 @@ static void ParseInput(void)
    }
    Len = 0;
    memset(Line, 0, 10);
-   Fi->Release();
    EntryStates = Next;
+   asm("DISI  #0x05"); // Disable interrupts for 5 instruction cycles
+   Fi->Release();
+   Request->Uart1Block = 1;
 }
 
 /***********************************************************************/
@@ -383,7 +394,9 @@ static void Tokenizer(void)
                            if(Len < 4)
                               Line[ Len++ ] = Character;                           
                            else
+                           {
                               EntryStates = Accept;
+                           }
                            break;
                         default:
                            EntryStates = Accept;
@@ -402,7 +415,11 @@ static void Tokenizer(void)
             EntryStates = Next;
       }
    }
-   if (EntryStates == Accept) ParseInput();
+   Fi->Release();
+   if (EntryStates == Accept) 
+      ParseInput();
+   else
+      Request->Uart1Block = 1;
 }
 
 /***********************************************************************/

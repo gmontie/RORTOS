@@ -37,6 +37,7 @@
 #include "Process.h"
 #include "Blk.h"
 
+
 #define CD74HC4051 "CD74HC4051 MUX"
 
 static void _Process(void);
@@ -62,11 +63,7 @@ static Service This =
 };
 
 static Register * SharedMuxVar; // A register element pointer
-static Register * RawADC;
-static Register * Lst[8] = {0};
-static unsigned Allocated;
-static unsigned Used = 0;
-static unsigned CurrentIndex;
+static unsigned End;
 
 /***********************************************************************/
 /*                                                                     */
@@ -77,21 +74,10 @@ static unsigned CurrentIndex;
 /*     Overview: IO Control for Memory                                 */
 /*                                                                     */
 /***********************************************************************/
-Service * Init74HC4051(VBLOCK * Desc)
+Service * Init74HC4051(unsigned RegIndex, unsigned MaxValue)
 {
-   int i;
-   int RegistersIndex = 0;
-
-   Allocated = Desc->Allocated;   
-   SharedMuxVar = getRegister( Desc->IndexList[ MuxIndex ] );
-   RawADC = getRegister( Desc->IndexList[ ADCRaw ] );
-   for(i = Adrss1, Used = 0; i < Allocated; i++, Used++)
-   {
-      RegistersIndex = Desc->IndexList[ i ];
-      Lst[ Used ]=getRegister( RegistersIndex );
-   }
-   Used--;
-   CurrentIndex = 0;
+   SharedMuxVar = getRegister(RegIndex);
+   End = MaxValue - 1;
    This.Driver = &This;
    return &This;
 }
@@ -107,8 +93,52 @@ Service * Init74HC4051(VBLOCK * Desc)
 /***********************************************************************/
 static void _Process(void)
 {
-   Lst[CurrentIndex]->Value = RawADC->Value;
-   Lst[CurrentIndex]->Changed = True;
+   SharedMuxVar->Value++;
+   SharedMuxVar->Value &= End;
+   SharedMuxVar->Changed = True;
+   switch( SharedMuxVar->Value )
+   {
+      case 0: 
+         ADDRS1 = 0;
+         ADDRS2 = 0;
+         ADDRS3 = 0;
+         break;
+      case 1: 
+         ADDRS1 = 1;
+         ADDRS2 = 0;
+         ADDRS3 = 0;
+         break;
+      case 2: 
+         ADDRS1 = 0;
+         ADDRS2 = 1;
+         ADDRS3 = 0;
+         break;
+      case 3: 
+         ADDRS1 = 1;
+         ADDRS2 = 1;
+         ADDRS3 = 0;
+         break;
+      case 4: 
+         ADDRS1 = 0;
+         ADDRS2 = 0;
+         ADDRS3 = 1;
+         break;
+      case 5: 
+         ADDRS1 = 1;
+         ADDRS2 = 0;
+         ADDRS3 = 1;
+         break;
+      case 6: 
+         ADDRS1 = 0;
+         ADDRS2 = 1;
+         ADDRS3 = 1;
+         break;
+      case 7: 
+         ADDRS1 = 1;
+         ADDRS2 = 1;
+         ADDRS3 = 1;
+         break;
+   }
 }
 
 /***********************************************************************/
@@ -122,15 +152,15 @@ static void _Process(void)
 /***********************************************************************/
 static unsigned _Read(byte Index)
 {
-   unsigned Results;
+   unsigned Results = 0;
    
    switch(Index)
    {
       case 0:
-         Results = Used;
+         Results = SharedMuxVar->Value;
          break;
       case 1:
-         Results = CurrentIndex;
+         Results = SharedMuxVar->Value;
          break;
    }
    return Results;
@@ -162,7 +192,9 @@ static void _Write(byte WhichBits, uint16_t What)
 /***********************************************************************/
 static void ChangeAddress(unsigned Address)
 {
-   CurrentIndex = (Address & 0x0007);
+   unsigned CurrentIndex = (Address & 0x0007);
+   SharedMuxVar->Value = CurrentIndex;
+   SharedMuxVar->Changed = True;
    switch( CurrentIndex )
    {
       case 0: 
@@ -206,7 +238,4 @@ static void ChangeAddress(unsigned Address)
          ADDRS3 = 1;
          break;
    }
-   SharedMuxVar->Value = CurrentIndex;
-   SharedMuxVar->Changed = True;
 }
-

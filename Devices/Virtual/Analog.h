@@ -36,16 +36,17 @@
 #include "Adc.h"
 #include "Blk.h"
 
+
 //////////////////////////////////////////////////////////////////////////////
 // Type declarations
 //
 typedef enum
 {
-   START, READING_READY, SORT_SAMPLES, SKIP, NEXT_READING, REPEAT
+   START, READING_READY, SORT_SAMPLES, SKIP, NEXT_READING
 } ADC_SAMPLING_STATES;
 
 typedef enum{COUNTS_MAX, COUNTS_MIN, VOLTAGE_MAX, VOLTAGE_MIN}CalTypes;
 
-Service * NewAnalog(AdOps * ChipsADC, Service * MuxIn, VBLOCK * Blk);
+Service * NewAnalog(AdOps * ChipsADC, VBLOCK * Blk);
 
 #endif

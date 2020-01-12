@@ -40,6 +40,7 @@
 #include "FanAUB0812VH.h"
 #include "Servlet.h"
 
+
 /****************************************************************************/
 /*                                                                          */
 /*  Duty Cycle      Speed RPM                                               */
@@ -95,7 +96,6 @@ Servlet * NewAUB0812VH(VBLOCK * BlkPtr) //Register * FanCounts, Register * FanRp
 
 /******************************************************************************/
 /*                                                                            */
-
 /******************************************************************************/
 static void StoreFanCounts(Servlet * Conv)
 {

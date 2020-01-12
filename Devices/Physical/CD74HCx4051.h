@@ -50,7 +50,6 @@ typedef enum
     Adrss8 = 9
 }MuxBlockMap;
 
-
-Service * Init74HC4051( VBLOCK * BlkPtr);
+Service * Init74HC4051( unsigned RegIndex, unsigned MaxValue);
 
 #endif
