@@ -71,5 +71,4 @@ typedef struct FileOperations
   void      (*Release)(void);
   void       *Usr; // User Structure to include.
 }fops;
-
 #endif

@@ -113,9 +113,9 @@ typedef union
    uint32_t Result;
 }Frational;
 
-#define IO_POWER_OF_2     7
-#define IO_BUFFER_SIZE  128
-#define IO_RAPAROUND    127
+#define IO_POWER_OF_2     6
+#define IO_BUFFER_SIZE   64
+#define IO_RAPAROUND     63
 #define BUFFER_EMPTY     -1
 
 #define DEVICE_EMPTY -1

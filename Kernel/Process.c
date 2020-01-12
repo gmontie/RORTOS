@@ -48,7 +48,7 @@ static void RunTask(void);
 static t_Process * NextProcess(t_Process * );
 static Boolean AllocProcess(int * Index);
 static Boolean AddProcess(Service * );
-static void SleepUntil(Service *, unsigned );
+static void SleepUntil(Service *, BlockedAllocations );
 
 // Kernel Object
 static Kernel This =
@@ -60,25 +60,24 @@ static Kernel This =
 };
 
 // File/Object scope private variables
-static t_Process Processes[MAX_PROCESSES];
-static t_Process  * BlockedList[MAX_PROCESSES]={0};
+static t_Process    Processes[MAX_PROCESSES];
+static t_Process  * BlockedList[BOCKED_TABLE_SIZE]={0};
 static t_Process  * CurrentProcess = 0;
 static t_Process  * Head = 0;
 
 static SEMIS        Symaphrs[MAX_PROCESSES];
-// SEMIS      * SyncList = 0;
-static SEMIS      * SyncHead  = 0;
+
+static IndicatorBits * SystemStatus;
+static RequestBits   * Requests;
 
 static Register   * SystemRegs;
-static byte Allocated;
-static unsigned T3Config;
-static unsigned Reload = 0; 
-static ThreadsState State;
+static byte         Allocated;
+static unsigned     T3Config;
+static unsigned     Reload = 0; 
 static volatile unsigned  StackPt;
 static volatile unsigned  StackMx;
 static volatile unsigned  FramPtr;
 static volatile unsigned  StatusRegister;
-static IndicatorBits * SystemStatus;
 static unsigned BusSemephors;
 
 /****************************************************************************/
@@ -111,6 +110,7 @@ Kernel * InitOS(void)
    memset((void*)Processes, 0, sizeof(Processes)); // Clear the process table
    SystemRegs = getRegisterSet(); // Save the reference to System Registers
    SystemStatus = getSystemStat();
+   Requests = getRequestBits();
    return &This;
 }
 
@@ -122,7 +122,7 @@ Kernel * InitOS(void)
 /*     Overview: T                                                          */
 /*                                                                          */
 /****************************************************************************/
-static void SleepUntil(Service * Srv, unsigned WhichOne)
+static void SleepUntil(Service * Srv, BlockedAllocations WhichOne)
 {
    t_Process  * aProcess;
    Boolean NotFound = True;
@@ -133,6 +133,7 @@ static void SleepUntil(Service * Srv, unsigned WhichOne)
       {
          NotFound = False;
          aProcess->State = Blocked;
+         aProcess->Group = WaitsOn;
          BlockedList[WhichOne] = aProcess;
       }
    }
@@ -160,11 +161,13 @@ static Boolean AddProcess(Service * Srv)
          Processes[Index].Address_1 = 0;
          Processes[Index].Address_2 = 0;
          Processes[Index].Quantum = Reload;
-         Processes[Index].State = Ready;
+         Processes[Index].State = Initial;
          Processes[Index].FnType = Srv->FnType;
          Processes[Index].PID = Index;
          Processes[Index].Dev = Srv;
          Processes[Index].Next = 0;
+         Processes[Index].Group = Free;
+         Processes[Index].Resource = _NONE_; // Bus Type
          switch (Srv->FnType)
          {
          case UpDateFn:
@@ -253,7 +256,7 @@ void SystemCall(int WhichOne)
 /*     Overview: T                                                          */
 /*                                                                          */
 /****************************************************************************/
-void WaitOn(unsigned WhichOne)
+void WaitOn(BlockedAllocations WhichOne)
 {
    BlockedList[WhichOne]->State = Blocked;
 }
@@ -290,14 +293,14 @@ Boolean FindNextFree(int * Index)
 /*     Overview: This is a round robin schedulare                           */
 /*                                                                          */
 /****************************************************************************/
-void Exec(Bus WhichBuss, void (*Fn)(void))
+void Exec(Bus WhichBus, void (*Fn)(void))
 {
-   switch (WhichBuss)
+   switch (WhichBus)
    {
       case _I2C_1:
          asm("BTSTS _BusSemephors, #0x00");
          asm("BRA   NZ, END_EXEC");
-         Fn();
+         Fn();         
          asm("BCLR _BusSemephors, #0x00");
          break;
       case _I2C_2:
@@ -343,202 +346,9 @@ void Exec(Bus WhichBuss, void (*Fn)(void))
          asm("BCLR _BusSemephors, #0x07");
          break;
       default:
-         asm("BRA   END_CAPTURE");
+         asm("BRA   END_EXEC");
    }
    asm("END_EXEC:");
-}
-
-/****************************************************************************/
-/*                                                                          */
-/*     Function:                                                            */
-/*        Input: None                                                       */
-/*       Return: None                                                       */
-/*     Overview: This is a round robin schedulare                           */
-/*                                                                          */
-/****************************************************************************/
-void Capture(Bus WhichOne)
-{
-   int Free = 0;
-   SEMIS * aProcess;
-   
-   if (FindNextFree(&Free))
-   {
-      //asm("DISI  #0x05");
-      switch (WhichOne)
-      {
-         case _I2C_1:
-            asm("BTSTS _BusSemephors, #0x00");
-            asm("BRA   Z, END_CAPTURE");
-            break;
-         case _I2C_2:
-            asm("BTSTS _BusSemephors, #0x01");
-            asm("BRA   Z, END_CAPTURE");
-            break;
-         case _I2C_3:
-            asm("BTSTS _BusSemephors, #0x02");
-            asm("BRA   Z, END_CAPTURE");
-            break;
-         case _SPI_1:
-            asm("BTSTS _BusSemephors, #0x03");
-            asm("BRA   Z, END_CAPTURE");
-            break;
-         case _SPI_2:
-            asm("BTSTS _BusSemephors, #0x04");
-            asm("BRA   Z, END_CAPTURE");
-            break;
-         case _SPI_3:
-            asm("BTSTS _BusSemephors, #0x05");
-            asm("BRA   Z, END_CAPTURE");
-            break;
-         case _Uart_1:
-            asm("BTSTS _BusSemephors, #0x06");
-            asm("BRA   Z, END_CAPTURE");
-            break;
-         case _Uart_2:
-            asm("BTSTS _BusSemephors, #0x07");
-            asm("BRA   Z, END_CAPTURE");
-            break;
-         default:
-            asm("BRA   END_CAPTURE");
-      }
-      
-      // Put the current process to sleep
-      CurrentProcess->State = Blocked;
-      CurrentProcess->Resource = WhichOne;
-      Symaphrs[Free].aProcess = CurrentProcess;
-
-      // Build Linked List of processes waiting for bus resources
-      if (SyncHead)
-      {
-         aProcess = SyncHead;
-         while (aProcess->Next)
-            aProcess = aProcess->Next;
-         aProcess->Next = &Symaphrs[Free];
-      }
-      else
-      {
-         SyncHead = &Symaphrs[Free];
-      }
-
-      // Change Context
-      asm("PUSH.D   W0"); // Save Registers
-      asm("PUSH.D   W2");
-      asm("PUSH.D   W4");
-      //asm("PUSH.D   W6");
-      asm("MOV      SR,            W0");
-      asm("AND.B    #0x1F,         W0");
-      asm("PUSH.D   W0");
-
-      // Save the Stack Pointer, Splim, and update the processes state
-      asm("MOV     _CurrentProcess, W2");
-      asm("ADD    #_StackAlc,       W2");
-      asm("MOV     SPLIM,           W0");
-      asm("MOV     W0,             [W2++]");
-      asm("MOV.D   W14,            [W2++]");
-
-      //CurrentProcess->State = Running;
-      asm("MOV     #0x01,           W0");
-      asm("MOV     W0,            _State");
-      asm("MOV     W0,             [W2]");
-
-      // Execute return to Kernel
-      asm("MOV      _CurrentProcess, W2");
-      asm("PUSH     [W2++]");
-      asm("PUSH     [W2++]");
-      asm("LNK      #0x0");
-   }
-   asm("END_CAPTURE:");
-}
-
-/****************************************************************************/
-/*                                                                          */
-/*     Function:                                                            */
-/*        Input: None                                                       */
-/*       Return: None                                                       */
-/*     Overview: This is a round robin schedulare                           */
-/*                                                                          */
-
-/****************************************************************************/
-void Release(void)
-{
-   SEMIS * sList = SyncHead;
-   SEMIS * Prev;
-   Bus BlockedOn = CurrentProcess->Resource;
-   CurrentProcess->Resource = _NONE_;
-   Boolean NotFound = False;
-   t_Process * aProcess;
-   // TODO: Finish figuring out how to complete/save the current task
-   //       and context. Currently the program is designed to save the
-   //       current task and 'switch to' the blocked task. It may be much
-   //       cleaner to set things up so that the current task finishes, and
-   //       the blocked task is queued such that the actual 
-   //       Switch-to-function actually switches in the task that was blocked.
-   
-   if (SyncHead)
-   {
-
-      while ((sList) && (NotFound))
-      {
-         Prev = sList;
-         sList = sList->Next;
-         aProcess = sList->aProcess;
-         if (aProcess->Resource == BlockedOn)
-         { // Unlink process from blocked list
-            Prev->Next = sList->Next;
-            aProcess->State = Running;
-            NotFound = False;
-
-            //asm("MOV.D  [--15], W0")
-
-            // Save Current Context
-            asm("PUSH.D   W0"); // Save Registers
-            asm("PUSH.D   W2");
-            asm("PUSH.D   W4");
-            //asm("PUSH.D   W6");
-            asm("MOV      SR,            W0");
-            asm("AND.B    #0x1F,         W0");
-            asm("PUSH.D   W0");
-
-            // Save the Stack Pointer, Splim, and update the processes state
-            asm("MOV     _CurrentProcess, W2");
-            asm("ADD    #_StackAlc,       W2");
-            asm("MOV     SPLIM,           W0");
-            asm("MOV     W0,             [W2++]");
-            asm("MOV.D   W14,            [W2++]");
-
-            //CurrentProcess->State = Running;
-            asm("MOV     #0x01,           W0");
-            asm("MOV     W0,            _State");
-            asm("MOV     W0,             [W2]");
-
-            // Execute return to Kernel
-            //asm("MOV      _CurrentProcess, W2");
-            //asm("PUSH     [W2++]");
-            //asm("PUSH     [W2++]");
-            //asm("LNK      #0x0");
-
-            CurrentProcess = aProcess;
-            //memset(&BlockedList[WhichOne], 0, sizeof (SEMIS));
-
-            asm("MOV      _CurrentProcess, W8");
-            asm("ADD     #_StackAlc,       W8");
-            asm("MOV     [W8++],           W0");
-            asm("DISI    #0x0E");
-            asm("MOV     W0,            SPLIM");
-            asm("MOV.D   [W8++],           W14");
-            asm("MOV.D   [--W15],          W0"); //Pop  the Status Register
-            asm("MOV     W0,               SR");
-            //asm("MOV.D  [--W15],         W6"); //Pop  W6:W7
-            asm("MOV.D  [--W15],           W4"); //Pop  W4:W5
-            asm("MOV.D  [--W15],           W2"); //Pop  W2:W3
-            asm("MOV.D  [--W15],           W0"); //Pop  W0:W1
-            IEC0bits.T3IE = 1; // Enable Timer1 interrupts
-            T3CONbits.TON = 1; // Turn T3 on
-            asm("ULNK");
-            asm("RETURN");
-         }
-      }
-   }
 }
 
 /****************************************************************************/
@@ -554,35 +364,38 @@ static t_Process * NextProcess(t_Process * ProcessPtr)
    t_Process * Results = 0;
    
    asm("SCHEDULAR:    MOV  _SystemStatus, W0");
-   asm("              MOV  [W0], W0");
 
    // Bit test and skip set Uart Ready Bit
-   asm("HANDLE_UART1: BTSS  W0, #0");
+   asm("HANDLE_UART1: BTSS  [W0], #0");
    asm("              BRA   HANDLE_NVRAM");
    Results = BlockedList[UART1Rdy];
    Results->State = Ready;
-   SystemStatus->Uart1Rdy = False;
    asm("              BRA   EXIT_SCHEDULAR");
    
    // Bit test and skip set NVRam Save
-   asm("HANDLE_NVRAM: BTSS  W0, #5");
+   asm("HANDLE_NVRAM: BTSS  [W0], #5");
    asm("              BRA   SCHEDULER");
    Results = BlockedList[CONFIGDrty];
    Results->State = Ready;
-   SystemStatus->CfgDirty = False;
    asm("              BRA  EXIT_SCHEDULAR");
          
-   asm("SCHEDULER:    NOP");
+   asm("SCHEDULER: ");
    do
    {
       if(ProcessPtr->Next != 0)
          ProcessPtr = ProcessPtr->Next;
       else
          ProcessPtr = Head;
-            
-      if((ProcessPtr->State == Ready) || (ProcessPtr->State == Running))
+
+      switch (ProcessPtr->State)
       {
-         Results = ProcessPtr;
+         case Initial:
+         case Ready:
+         case Running:
+            Results = ProcessPtr;
+            break;
+         case Blocked: break;
+         case Terminated:break;
       }
    }while (Results == 0);
 
@@ -618,11 +431,10 @@ void RunTask(void)
       // Set the process's state to Running
       IFS0bits.T3IF = 0; // Clear Timer3 Interrupt Flag
       IEC0bits.T3IE = 1; // Enable Timer 3 interrupt
-      State = Ready;
 
       switch (CurrentProcess->State)
-      {
-            /******************************************************************/
+      {  //-------------------------------------------------------------------//
+         case Initial: // If it is a new process then prime the pump
          case Ready: // If it is a new process then prime the pump
             // Give the process a fresh stack
             asm("DISI  #0x05");
@@ -653,10 +465,29 @@ void RunTask(void)
             IEC0bits.T3IE = 0;
             TMR3 = 0x00; // Clear contents of the timer register
 
-            if (State == Ready)
+            if (CurrentProcess->State == Initial)
                CurrentProcess->State = Ready;
+               
+            // Check to see if the process which just ran needs to go into
+            // a blocked state waiting for input
+            asm("BOCK_TESTS:    MOV   _Requests, W0");
+            asm("               BRA   Z, RESTORE_CONTEXT");
+            
+            asm("BLOCK_UART1:   BTSS  [W0], #0x08");
+            asm("               BRA   CONFG_BLK");
+            asm("               BCLR  [W0], #0x08");
+            asm("               BRA   PROCESS_SLEEP");
+            
+            asm("CONFG_BLK:     BTSS  [W0], #0x06");
+            asm("               BRA   RESTORE_CONTEXT");
+            asm("               BCLR  [W0], #0x06");
+            //asm("               BRA   PROCESS_SLEEP");
+            
+            asm("PROCESS_SLEEP:");
+            CurrentProcess->State = Blocked;
 
             // Restore the System's Stack(StackPt, StackMx);
+            asm("RESTORE_CONTEXT:");
             asm("MOV   _StackMx,         W0");
             asm("DISI  #0x05"); // Disable interrupts for 5 instruction cycles
             asm("MOV    W0,              SPLIM");
@@ -665,18 +496,16 @@ void RunTask(void)
             asm("MOV   _StatusRegister,  W0"); //; Fetch previous Status Register Value"
             asm("MOV    W0,              SR");
             break;
-            /******************************************************************/
+         //-------------------------------------------------------------------//
          case Running: // If the process is running complete it if possible
-            //asm("NOP");
             asm("MOV      _CurrentProcess, W8");
             asm("ADD     #_StackAlc,       W8");
             asm("MOV     [W8++],           W0");
             asm("DISI    #0x0E");
-            asm("MOV     W0,            SPLIM");
+            asm("MOV     W0,               SPLIM");
             asm("MOV.D   [W8++],           W14");
             asm("MOV.D   [--W15],          W0"); //Pop  the Status Register
             asm("MOV     W0,               SR");
-            //asm("MOV.D  [--W15],         W6"); //Pop  W6:W7
             asm("MOV.D  [--W15],           W4"); //Pop  W4:W5
             asm("MOV.D  [--W15],           W2"); //Pop  W2:W3
             asm("MOV.D  [--W15],           W0"); //Pop  W0:W1
@@ -685,13 +514,14 @@ void RunTask(void)
             asm("ULNK");
             asm("RETURN");
             break;
+         //-------------------------------------------------------------------//
          case Blocked:
             break;
+         //-------------------------------------------------------------------//
          case Terminated:
             break;
       }
-   }
-   while (LOOPING_FOREVER); // Repeat Forever
+   } while (LOOPING_FOREVER); // Repeat Forever
 }
 
 /****************************************************************************/
@@ -712,22 +542,20 @@ void __attribute__((interrupt, shadow, no_auto_psv)) _T3Interrupt(void)
    asm("PUSH.D   W0"); // Save Registers
    asm("PUSH.D   W2");
    asm("PUSH.D   W4");
-   //asm("PUSH.D   W6");
    asm("MOV      SR,            W0");
    asm("AND.B    #0x1F,         W0");
    asm("PUSH.D   W0");
 
    // Save the Stack Pointer, Splim, and update the processes state
-   asm("MOV     _CurrentProcess, W2");
-   asm("ADD     #_StackAlc,      W2");
-   asm("MOV     SPLIM,           W0");
-   asm("MOV     W0,             [W2++]");
-   asm("MOV.D   W14,            [W2++]");
+   asm("MOV      _CurrentProcess, W2");
+   asm("ADD      #_StackAlc,      W2");
+   asm("MOV      SPLIM,           W0");
+   asm("MOV      W0,             [W2++]");
+   asm("MOV.D    W14,            [W2++]");
 
    //CurrentProcess->State = Running;
-   asm("MOV     #0x01,           W0");
-   asm("MOV     W0,            _State");
-   asm("MOV     W0,             [W2]");
+   asm("MOV      #Running,           W0");
+   asm("MOV      W0,                [W2]");
 
    // Execute return to Kernel
    asm("MOV      _CurrentProcess, W2");

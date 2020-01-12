@@ -29,9 +29,9 @@
 ;*                                                                          * 
 ;**************************************************************************** 
 .include "xc.inc"
-#include "Kernel.h"
-
-.equ    IPL,     0x00E0 ; Set IPL0 through IPL2 to 1 to turn off interrupts
+#include "Process.h"
+    
+.equ    IPL,        0x00E0 ; Set IPL0 through IPL2 to 1 to turn off interrupts
 
 .section .text
 
@@ -42,5 +42,21 @@
 .equ    _StackAlc, 0x0100
 .global _StackAlc
 
+ ;typedef enum{Initial=0, Ready=1, Running=2, Blocked=3, Terminated=4}ThreadsState;
+.equ    Initial,    0
+.global Initial
+ 
+.equ    Ready,      1
+.global Ready
+ 
+.equ    Running,    2
+.global Running
+ 
+.equ    Blocked,    3
+.global Blocked
+ 
+.equ    Terminated, 4
+.global Terminated
+
 .end
-   
+ 

@@ -52,8 +52,8 @@
     1.4 Blocked
     1.5 Terminated
 */
-typedef enum{Ready=0, Running=1, Blocked=2, Terminated=3}ThreadsState;
-
+typedef enum{Initial=0, Ready=1, Running=2, Blocked=3, Terminated=4}ThreadsState;
+typedef enum{Free, WaitsOn}ProcessGroup; 
 typedef void (*UpDatePtr)(void*);
 typedef void (*DevicePtr)(Service*);
 typedef void (*ProcessPtr)(void);
@@ -73,17 +73,18 @@ typedef struct process_entry
     unsigned      Address_1; // Return to if Running
     unsigned      Address_2; // Return to if Running
     ThreadsState  State;
-
+    ProcessGroup  Group;
+    
     // Thread Data
     byte          Priority;
     
     // The used or not byte
     byte          Used;    
-    unsigned      Quantum; // Filled out by System/Issuer
+    unsigned      Quantum;  // Filled out by System/Issuer
     Bus           Resource;
-    DevFnTypes    FnType;        // Filled out by Object/Requester
+    DevFnTypes    FnType;   // Filled out by Object/Requester
 
-    void       * Arg;
+    void        * Arg;
     
     union 
     {
@@ -111,12 +112,15 @@ typedef struct
 {
     void (*Run)(void);
     Boolean (*Add)(Service * );
-    void (*WaitOn)(Service *, unsigned );
+    void (*WaitOn)(Service *, BlockedAllocations );
     void (*System)(int);
 }Kernel;
 
 Kernel * InitOS(void);
 
+//void WaitOn(BlockedAllocations);
+
 void __attribute__((interrupt, shadow, no_auto_psv)) _T3Interrupt(void);
 
 #endif
+
