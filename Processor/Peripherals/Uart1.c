@@ -118,26 +118,26 @@ static void ClearBit(void){ISS->Uart1Rdy = 0;}
 /* Notes:                                                                   */
 /*                                                                          */
 /****************************************************************************/
-void UART1Init( long BaudRate )
+void UART1Init(long BaudRate)
 {
- // Set directions of UART IOs
-  U1MODE = 0;
-  U1STA = 0;
-  
-  U1MODEbits.RTSMD = 1;
-  U1MODEbits.UARTEN = 1;
-  U1MODEbits.USIDL = 0; // Form operation in Idle Mode
+   // Set directions of UART IOs
+   U1MODE = 0;
+   U1STA = 0;
 
-  U1STAbits.UTXEN = 1;
+   U1MODEbits.RTSMD = 1;
+   U1MODEbits.UARTEN = 1;
+   U1MODEbits.USIDL = 0; // Form operation in Idle Mode
 
-  // reset RX flag
-  IPC2bits.U1RXIP = 6; // Set as highest Interrupt priority
-  IFS0bits.U1RXIF = 0;
-  IEC0bits.U1RXIE = 1; // Enable Receive Interrupts
-  
-  Uart1Reset();
+   U1STAbits.UTXEN = 1;
 
-  Uart1SetBaudRate(BaudRate); // Otherwise use the users Baud rate value.
+   // reset RX flag
+   IPC2bits.U1RXIP = 6; // Set as highest Interrupt priority
+   IFS0bits.U1RXIF = 0;
+   IEC0bits.U1RXIE = 1; // Enable Receive Interrupts
+
+   Uart1Reset();
+
+   Uart1SetBaudRate(BaudRate); // Otherwise use the users Baud rate value.
 }
 
 /****************************************************************************/
@@ -151,11 +151,11 @@ void UART1Init( long BaudRate )
 /* Notes:                                                                   */
 /*                                                                          */
 /****************************************************************************/
-void Uart1Reset( void )
+void Uart1Reset(void)
 {
-  memset((char*)&Uart1Tx, 0, sizeof(Queue));
-  memset((char*)&Uart1Rx, 0, sizeof(Queue));
-  Uart1Txing = False;
+   memset((char*) &Uart1Tx, 0, sizeof (Queue));
+   memset((char*) &Uart1Rx, 0, sizeof (Queue));
+   Uart1Txing = False;
 }
 
 /****************************************************************************/
@@ -234,20 +234,20 @@ Boolean Uart1CharAvail(void)
 /* Notes:                                                                   */
 /*                                                                          */
 /****************************************************************************/
-int Uart1GetChar( void )
+int Uart1GetChar(void)
 {
-  unsigned Results = DEVICE_EMPTY;
+   unsigned Results = DEVICE_EMPTY;
 
-  if(Uart1Rx.Count > 0)
-  {
-    Results = Uart1Rx.Buffer[Uart1Rx.Head++];
-    Uart1Rx.Head &= (IO_RAPAROUND);
-    Uart1Rx.Count--;
-  }
-  else
-     Uart1Rx.Count &= 0; // Make sure that count does not go below zero;
+   if (Uart1Rx.Count > 0)
+   {
+      Results = Uart1Rx.Buffer[Uart1Rx.Head++];
+      Uart1Rx.Head &= (IO_RAPAROUND);
+      Uart1Rx.Count--;
+   }
+   else
+      Uart1Rx.Count &= 0; // Make sure that count does not go below zero;
 
-  return Results;
+   return Results;
 }
 
 /****************************************************************************/
@@ -264,23 +264,23 @@ int Uart1GetChar( void )
 /****************************************************************************/
 void Uart1WriteStr(char * BufferPtr)
 {
-  char Ch = 0;
-  while((Ch = *BufferPtr++))
-  {
-    if(Uart1Tx.Count < IO_BUFFER_SIZE)
-    {
-      Uart1Tx.Buffer[Uart1Tx.Tail++] = Ch;
-      Uart1Tx.Tail &= IO_RAPAROUND;
-      Uart1Tx.Count++;
-    }
+   char Ch = 0;
+   while ((Ch = *BufferPtr++))
+   {
+      if (Uart1Tx.Count < IO_BUFFER_SIZE)
+      {
+         Uart1Tx.Buffer[Uart1Tx.Tail++] = Ch;
+         Uart1Tx.Tail &= IO_RAPAROUND;
+         Uart1Tx.Count++;
+      }
 
-    if(!Uart1Txing)
-    {
-      Uart1Txing = Yes;
-      U1STAbits.UTXEN = 1;
-      U1TXREG = Ch;
-    }
-  }
+      if (!Uart1Txing)
+      {
+         Uart1Txing = Yes;
+         U1STAbits.UTXEN = 1;
+         U1TXREG = Ch;
+      }
+   }
 }
 
 /****************************************************************************/
@@ -297,23 +297,23 @@ void Uart1WriteStr(char * BufferPtr)
 /****************************************************************************/
 void Uart1WriteConstStr(const char * BufferPtr)
 {
-  char Ch = 0;
-  while((Ch = *BufferPtr++))
-  {
-    if(Uart1Tx.Count < IO_BUFFER_SIZE)
-    {
-      Uart1Tx.Buffer[Uart1Tx.Tail++] = Ch;
-      Uart1Tx.Tail &= IO_RAPAROUND;
-      Uart1Tx.Count++;
-    }
+   char Ch = 0;
+   while ((Ch = *BufferPtr++))
+   {
+      if (Uart1Tx.Count < IO_BUFFER_SIZE)
+      {
+         Uart1Tx.Buffer[Uart1Tx.Tail++] = Ch;
+         Uart1Tx.Tail &= IO_RAPAROUND;
+         Uart1Tx.Count++;
+      }
 
-    if(!Uart1Txing)
-    {
-      Uart1Txing = Yes;
-      U1STAbits.UTXEN = 1;
-      U1TXREG = Ch;
-    }
-  }
+      if (!Uart1Txing)
+      {
+         Uart1Txing = Yes;
+         U1STAbits.UTXEN = 1;
+         U1TXREG = Ch;
+      }
+   }
 }
 
 /****************************************************************************/
@@ -328,21 +328,21 @@ void Uart1WriteConstStr(const char * BufferPtr)
 /* Notes:                                                                   */
 /*                                                                          */
 /****************************************************************************/
-void Uart1Write (unsigned * BufferPtr, unsigned char Length)
+void Uart1Write(unsigned * BufferPtr, unsigned char Length)
 {
-  int i = 0;
+   int i = 0;
 
-  while(i < Length)
-  {
-    if(Uart1Tx.Count < IO_BUFFER_SIZE)
-    {
-      Uart1Tx.Buffer[Uart1Tx.Tail++] = *(char *)BufferPtr;
-      Uart1Tx.Tail++;
-      Uart1Tx.Tail &= IO_RAPAROUND;
-      Uart1Tx.Count++;
-    }
-    i++;
-  }
+   while (i < Length)
+   {
+      if (Uart1Tx.Count < IO_BUFFER_SIZE)
+      {
+         Uart1Tx.Buffer[Uart1Tx.Tail++] = *(char *) BufferPtr;
+         Uart1Tx.Tail++;
+         Uart1Tx.Tail &= IO_RAPAROUND;
+         Uart1Tx.Count++;
+      }
+      i++;
+   }
 }
 
 /****************************************************************************/
@@ -359,22 +359,19 @@ void Uart1Write (unsigned * BufferPtr, unsigned char Length)
 /****************************************************************************/
 unsigned int Uart1Read(unsigned char * BufferPtr, unsigned char Length)
 {
-  unsigned int i = 0;
-  
-  while(i++ < Length)
-  {
-    if(Uart1Rx.Count > 0)
-    {
-      *BufferPtr = Uart1Rx.Buffer[Uart1Rx.Head++];
-      Uart1Rx.Head++;
-      Uart1Rx.Head &= IO_RAPAROUND;
-      Uart1Rx.Count--;
-    }
-    //else
-    //  break;
-    //i++;
-  }
-  return (i + 1);
+   unsigned int i = 0;
+
+   while (i++ < Length)
+   {
+      if (Uart1Rx.Count > 0)
+      {
+         *BufferPtr = Uart1Rx.Buffer[Uart1Rx.Head++];
+         Uart1Rx.Head++;
+         Uart1Rx.Head &= IO_RAPAROUND;
+         Uart1Rx.Count--;
+      }
+   }
+   return (i + 1);
 }
 
 /****************************************************************************/
@@ -387,17 +384,18 @@ unsigned int Uart1Read(unsigned char * BufferPtr, unsigned char Length)
 /****************************************************************************/
 void __attribute__((interrupt, no_auto_psv))_U1RXInterrupt(void)
 {
-  if(Uart1Rx.Count < IO_BUFFER_SIZE)
-  {
-    Uart1Rx.Buffer[Uart1Rx.Tail++] = U1RXREG;
-    Uart1Rx.Tail &= IO_RAPAROUND;
-    Uart1Rx.Count++;
-  }
+   
+   if (Uart1Rx.Count < IO_BUFFER_SIZE)
+   {
+      Uart1Rx.Buffer[Uart1Rx.Tail++] = U1RXREG;
+      Uart1Rx.Tail &= IO_RAPAROUND;
+      Uart1Rx.Count++;
+   }
 
-  ISS->Uart1Rdy = 1;
-  U1STAbits.FERR = 0;		// Bit2 *Read Only Bit*
-  U1STAbits.OERR = 0;		// Bit1 *Read Only Bit*
-  IFS0bits.U1RXIF = 0;
+   ISS->Uart1Rdy = 1;
+   U1STAbits.FERR = 0; // Bit2 *Read Only Bit*
+   U1STAbits.OERR = 0; // Bit1 *Read Only Bit*
+   IFS0bits.U1RXIF = 0;
 }
 
 /****************************************************************************/
@@ -411,21 +409,21 @@ void __attribute__((interrupt, no_auto_psv))_U1RXInterrupt(void)
 /* Notes:                                                                   */
 /*                                                                          */
 /****************************************************************************/
-void __attribute__ ((interrupt, no_auto_psv)) _U1TXInterrupt(void)
+void __attribute__((interrupt, no_auto_psv)) _U1TXInterrupt(void)
 {
-  if(Uart1Tx.Count > 0)
-  {
-    U1TXREG = Uart1Tx.Buffer[Uart1Tx.Head++];
-    Uart1Tx.Head &= IO_RAPAROUND;
-    Uart1Tx.Count--;
-  }
+   if (Uart1Tx.Count > 0)
+   {
+      U1TXREG = Uart1Tx.Buffer[Uart1Tx.Head++];
+      Uart1Tx.Head &= IO_RAPAROUND;
+      Uart1Tx.Count--;
+   }
 
-  if(Uart1Tx.Count == 0)
-  {
-    Uart1Txing = No;
-  }
-  
-  U1STAbits.FERR = 0;		// Bit2 *Read Only Bit*
-  U1STAbits.OERR = 0;		// Bit1 *Read Only Bit*
-  IFS0bits.U1TXIF = 0;
+   if (Uart1Tx.Count == 0)
+   {
+      Uart1Txing = No;
+   }
+
+   U1STAbits.FERR = 0; // Bit2 *Read Only Bit*
+   U1STAbits.OERR = 0; // Bit1 *Read Only Bit*
+   IFS0bits.U1TXIF = 0;
 }

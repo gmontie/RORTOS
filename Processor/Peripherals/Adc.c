@@ -36,6 +36,7 @@
 #include "defs.h"
 #include "Adc.h"
 
+
 // Functions for use by the ADC Object
 static unsigned ReadADC(void); // Take an ADC Reading (Not implemented here)
  void BubbleSort(void); // Sort the results so that NextADC can do it's job
@@ -47,6 +48,7 @@ static void StartADReading(void); // Start the DMA for the ADC
 static void StopADReading(void);
 static void initDma0(void); // Initialize the DMA for the ADC
 static void ClrBuffers(void);
+static void SetupADISR(void);
 
 // Private data which the ADC uses!
  int BufferA[NUMBER_OF_SAMPLES] __attribute__((space(dma)));
@@ -54,8 +56,8 @@ static void ClrBuffers(void);
  int Transfr[NUMBER_OF_SAMPLES];
 static volatile long Sum;
 static int Index;
-static int x;
-static int n;
+static unsigned x;
+static unsigned n;
 static int y;
 volatile int Temp;
  Boolean InUse;
@@ -74,24 +76,11 @@ static AdOps This =
    .StartReading = StartADReading,
    .StopReading = StopADReading,
    .Next = DigitalFilter,
-   .Sort = BubbleSort,
+   //.Sort = BubbleSort,
+   .Sort = ShellSort,
    .Clear = ClrBuffers,
    .ReadingReady = False
 };
-
-/****************************************************************************/
-/*                                                                          */
-/*     Function: SetupADISR                                                 */
-/*        Input: None                                                       */
-/*       Return: None                                                       */
-/*     Overview: Sets up the Interrupt Service routeen for the ADC Unit     */
-/*                                                                          */
-/****************************************************************************/
-static void SetupADISR(void)
-{
-   IPC3bits.AD1IP = 2; // Next to lowest priority interrupt
-   IFS0bits.AD1IF = 0; // Clear Interrupt Flags
-}
 
 /****************************************************************************/
 /*                                                                          */
@@ -161,6 +150,20 @@ AdOps * ADCInit(unsigned Index)
 
 /****************************************************************************/
 /*                                                                          */
+/*     Function: SetupADISR                                                 */
+/*        Input: None                                                       */
+/*       Return: None                                                       */
+/*     Overview: Sets up the Interrupt Service routeen for the ADC Unit     */
+/*                                                                          */
+/****************************************************************************/
+static void SetupADISR(void)
+{
+   IPC3bits.AD1IP = 2; // Next to lowest priority interrupt
+   IFS0bits.AD1IF = 0; // Clear Interrupt Flags
+}
+
+/****************************************************************************/
+/*                                                                          */
 /*     Function: StartAD1                                                   */
 /*        Input: None                                                       */
 /*       Return: None                                                       */
@@ -210,7 +213,7 @@ static void initDma0(void)
    DMA0CONbits.AMODE = 0; // Configure DMA for Register indirect with post increment
    DMA0CONbits.MODE = 2; // Configure DMA for Continuous Ping-Pong mode
 
-   DMA0PAD = (int) &ADC1BUF0; // Store the address of the ADC1 Result buffer
+   DMA0PAD = (unsigned) &ADC1BUF0; // Store the address of the ADC1 Result buffer
    DMA0CNT = (NUMBER_OF_SAMPLES - 1);
 
    DMA0REQ = 13;
@@ -275,15 +278,16 @@ static void initDma0(void)
    int j;
    n = NUMBER_OF_SAMPLES;
    
-   for (x = 0; x < NUMBER_OF_SAMPLES; x++)
+   x = n;
+   x = n >> 1;
+   for (; x > 0; x = (x >> 1))
    {
       gap = Transfr[x];
       // Do a gapped insertion sort for this gap size.
       // The first gap elements a[0..gap-1] are already in gapped order
       // keep adding one more element until the entire array is gap sorted
       for (i = gap; i < n; i += 1)
-      {
-         // add a[i] to the elements that have been gap sorted
+      {  // add a[i] to the elements that have been gap sorted
          // save a[i] in temp and make a hole at position i
          Temp = Transfr[i];
          // shift earlier gap-sorted elements up until the correct location for a[i] is found
@@ -315,9 +319,8 @@ static void DigitalFilter(void)
    for (Sum = 0, Index = 8; Index < 24; Index++) Sum += Transfr[Index];
    InUse = False; // Clr Semiphore
    Sum >>= (SHIFTS - 1); // Divide by 16
-   //Sum >>= 1; // Divide by another 2
-   Temp = (0x0FFF & Sum);
    Reg->Value = (0x0FFF & Sum); // Make sure that value fits.
+   Sum = 0;
    Reg->Changed = True; // Indicate the we have a new value
    This.ReadingReady = False; // Signal that the DMA must now get a new reading
 }
@@ -400,6 +403,6 @@ void __attribute__((interrupt, no_auto_psv)) _DMA0Interrupt(void)
    else
       memcpy(Transfr, BufferA, sizeof(BufferB));
    This.ReadingReady = True; // Indicate that a new sample set is ready
-   SystemStat->AdRdy  = True;
+   //SystemStat->AdRdy  = True;
    IFS0bits.DMA0IF = 0; // Clear the DMA0 Interrupt Flag
 }

@@ -33,6 +33,7 @@
 #include "PinConfig.h"
 #include "System.h"
 
+
 // Oscillator Initialization
 static void OscillatorInit(void); // Make sure that function can not be seen
 // outsize of this file.
@@ -51,7 +52,6 @@ void HardwareInit()
 {
    RCONbits.SWDTEN = 0; // Turn watchdog timer off
    SystemConfig();
-   Delay(30);
    OscillatorInit();
 }
 

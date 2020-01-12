@@ -50,6 +50,8 @@ static Boolean BlockReadSPI1(byte *BlockPtr, byte Length);
 static void SPI_Enable(Boolean);
 static unsigned GetSPIWd1(void);
 static Boolean GetSPI116BitMode(void);
+static void ClrRequest(void);
+static volatile IndicatorBits * ISS;
 
 // Private variables/members
 static Queue Spi1Tx;
@@ -79,6 +81,8 @@ static struct FileOperations This =
    .GetCh = ReadSPI1,
    .GetWd = GetSPIWd1,
    .PutCh = WriteSPI1,
+   .Release = ClrRequest,
+   .Resource = _I2C_1,
    .PutStr = 0,
 };
 
@@ -119,6 +123,7 @@ fops * InitSPI1(SPI_MODES Mode)
 
    // SPI is now set up so enable it.
    SPI1STATbits.SPIEN = 1;
+   ISS = getSystemStat();
    This.Usr = (void*)&_SPI1_;
    return &This;
 }
@@ -151,6 +156,19 @@ static void SPI1InterruptsMode(Boolean InteruptsOn)
    }
    IPC2bits.SPI1IP = 7; // Medium priority for SPI Interrupt
 }
+
+/****************************************************************************/
+/*                                                                          */
+/*     Function:                                                            */
+/*                                                                          */
+/*        Input: None                                                       */
+/*       Output: None                                                       */
+/* Side Effects:                                                            */
+/*     Overview:                                                            */
+/* Notes:                                                                   */
+/*                                                                          */
+/****************************************************************************/
+static void ClrRequest(void){ISS->SPI1Rdy = 0; }
 
 /****************************************************************************/
 /*                                                                          */
@@ -447,9 +465,6 @@ static int ReadSPI1(void)
    SPI1STATbits.SPIROV &= 0;
    SPI1BUF = 0x00; // initiate bus cycle
 
-//   while((!SPI1STATbits.SPITBF) && (SPI1STATbits.SPIRBF)); // While still transmitting
-//   while(!SPI1STATbits.SPIRBF); // While receive is not finished
-
    while (!SPI1STATbits.SPIRBF);
    /* Check for Receive buffer full status bit of status register*/
    if (SPI1STATbits.SPIRBF)
@@ -458,7 +473,6 @@ static int ReadSPI1(void)
       return SPI1BUF; /* return word read */
    }
    return -1; /* RBF bit is not set return error*/
-//   return SPI1BUF;
 }
 
 /******************************************************************************
